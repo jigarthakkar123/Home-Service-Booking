@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models.models import (
-    Technician, User, ServiceProvider, BookingAssignment, Booking,
+    Technician, User, Customer, ServiceProvider, BookingAssignment, Booking,
     BookingImage, Notification
 )
 from app.schemas.schemas import (
