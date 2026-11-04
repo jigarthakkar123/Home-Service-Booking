@@ -82,7 +82,7 @@ def get_assigned_jobs(
     assignments = db.query(BookingAssignment).options(
         joinedload(BookingAssignment.booking).joinedload(Booking.service),
         joinedload(BookingAssignment.booking).joinedload(Booking.address),
-        joinedload(BookingAssignment.booking).joinedload(Booking.customer).joinedload(User.customer_profile)
+        joinedload(BookingAssignment.booking).joinedload(Booking.customer).joinedload(Customer.user)
     ).filter(BookingAssignment.technician_id == tech.id).order_by(BookingAssignment.assigned_at.desc()).all()
 
     jobs = []

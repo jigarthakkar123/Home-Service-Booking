@@ -33,6 +33,8 @@ export default function TechnicianDashboard() {
 
   useEffect(() => {
     loadJobs();
+    const interval = setInterval(loadJobs, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleUpdateStatus = async (e) => {
