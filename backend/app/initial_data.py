@@ -21,6 +21,13 @@ def init_db():
         # Check if already seeded
         admin_check = db.query(User).filter(User.email == "admin@homeserve.com").first()
         if admin_check:
+            # Update customer name to Jigar Thakkar
+            cust = db.query(User).filter(User.email == "customer@homeserve.com").first()
+            if cust and cust.first_name != "Jigar":
+                cust.first_name = "Jigar"
+                cust.last_name = "Thakkar"
+                db.commit()
+                print("Updated customer name to Jigar Thakkar.")
             print("Database already contains initial seed data.")
             return
 
@@ -58,8 +65,8 @@ def init_db():
             email="customer@homeserve.com",
             hashed_password=get_password_hash("Customer@123"),
             role="customer",
-            first_name="Rahul",
-            last_name="Sharma",
+            first_name="Jigar",
+            last_name="Thakkar",
             phone="+91 98765 00003",
             is_active=True,
             is_verified=True
@@ -344,7 +351,7 @@ def init_db():
             provider_id=provider_profile.id,
             rating=5,
             comment="Excellent technician Vikram! Fixed the water dripping issue in 30 minutes. Super polite and professional.",
-            provider_reply="Thank you Rahul! We are delighted you enjoyed our AC jet wash service."
+            provider_reply="Thank you Jigar! We are delighted you enjoyed our AC jet wash service."
         ))
 
         # Booking 2: Upcoming / Confirmed Electrical

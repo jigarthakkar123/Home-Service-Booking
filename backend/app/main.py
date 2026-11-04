@@ -6,9 +6,11 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.api import api_router
 from app.models import models  # Ensures all models are registered
+from app.initial_data import init_db
 
-# Create database tables automatically
+# Create database tables automatically & seed
 Base.metadata.create_all(bind=engine)
+init_db()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
