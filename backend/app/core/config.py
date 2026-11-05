@@ -10,9 +10,9 @@ DEFAULT_DB_URL = f"sqlite:///{DEFAULT_DB_FILE.as_posix()}"
 class Settings(BaseSettings):
     PROJECT_NAME: str = "HomeServe Technologies SaaS Platform"
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "super-secret-jwt-key-for-homeserve-saas-platform-2026")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "hs-sec-2026-9f8a3c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours (Strict OWASP standard)
 
     # Database: Supports Cloud MySQL (Aiven, TiDB, Render, Supabase, PlanetScale) or local SQLite fallback
     # e.g., mysql+pymysql://user:pass@host:3306/dbname
@@ -25,15 +25,14 @@ class Settings(BaseSettings):
     # Platform default commission percentage
     DEFAULT_COMMISSION_PERCENTAGE: float = 15.0
 
-    # CORS origins
+    # CORS origins: Explicit production domain & local environments
     BACKEND_CORS_ORIGINS: List[str] = [
+        "https://homeservicebooking.netlify.app",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:4173",
         "http://127.0.0.1:5173",
-        "https://*.netlify.app",
-        "https://*.onrender.com",
-        "*"
+        "http://127.0.0.1:3000"
     ]
 
     class Config:

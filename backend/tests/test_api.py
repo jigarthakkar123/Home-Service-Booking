@@ -306,4 +306,44 @@ def test_admin_export_csv():
     assert resp.status_code == 200
     assert "text/csv" in resp.headers["content-type"]
 
+def test_admin_registration_forbidden():
+    # Attempt to register as admin must be blocked with HTTP 403
+    resp = client.post("/api/v1/auth/register", json={
+        "email": "hacker_admin@test.com",
+        "password": "Password@123",
+        "role": "admin",
+        "first_name": "Malicious",
+        "last_name": "Admin"
+    })
+    assert resp.status_code == 403
+    assert "strictly prohibited" in resp.json()["detail"].lower()
+
+def test_unauthenticated_upload_rejected():
+    # Calling /api/v1/uploads without token must be blocked with HTTP 401
+    import io
+    file_content = b"fake image content"
+    files = {"file": ("test.png", io.BytesIO(file_content), "image/png")}
+    resp = client.post("/api/v1/uploads", files=files)
+    assert resp.status_code == 401
+
+def test_technician_cannot_alter_booking_status_directly():
+    # Technician attempting to call PUT /api/v1/bookings/{id}/status must return HTTP 403
+    tech_login = client.post("/api/v1/auth/login", json={
+        "email": "technician@homeserve.com",
+        "password": "Technician@123"
+    })
+    token = tech_login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = client.put("/api/v1/bookings/1/status", json={"status": "completed"}, headers=headers)
+    assert resp.status_code == 403
+
+def test_forgot_password_does_not_leak_token():
+    # Calling forgot-password must not return demo_reset_token in HTTP response
+    resp = client.post("/api/v1/auth/forgot-password", json={"email": "customer@homeserve.com"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "demo_reset_token" not in data
+    assert "expires_in_minutes" in data
+
+
 

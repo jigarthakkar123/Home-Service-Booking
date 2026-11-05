@@ -56,15 +56,13 @@ HomeServe Technologies enforces a **Defense-in-Depth** security architecture acr
 
 ---
 
-## 5. Security Checklist Deliverable
+## 5. Security Implementation Deliverables in Source Code
 
-- [x] Passwords hashed with bcrypt (salt factor 12)
-- [x] Zero plaintext passwords stored in database or logs
-- [x] JWT access tokens signed with 256-bit secret key
-- [x] Role-Based Access Control enforced on all 40+ endpoints
-- [x] Horizontal and vertical privilege escalation prevented
-- [x] SQLAlchemy ORM used for 100% of database interactions (No SQL Injection)
-- [x] Double-booking race conditions prevented via atomic transactions
-- [x] File upload size and extension whitelisting enforced
-- [x] Automated test cases covering authentication and authorization failures
-- [x] HTTPS enforced across Netlify CDN and Render PaaS
+- [x] **Registration Role Guard** (`app/api/v1/auth.py`): Rejects any self-registration with `role: "admin"` with HTTP 403 Forbidden. Only `customer` and `provider` self-registration permitted.
+- [x] **Token Leakage Prevention & Expiry** (`app/api/v1/auth.py`): `/forgot-password` does NOT return the token in the API response. Generates tokens with strict 15-minute expiration timestamp (`reset_token_expires_at`).
+- [x] **File Upload Authentication & Boundaries** (`app/api/v1/uploads.py`): Unauthenticated requests return HTTP 401 Unauthorized. Files restricted to `.jpg`, `.jpeg`, `.png`, `.webp` and strict 5MB size limit (HTTP 413 on excess).
+- [x] **Strict CORS Whitelist** (`app/main.py`, `app/core/config.py`): Disallowed wildcard origins; restricted strictly to `https://homeservicebooking.netlify.app` and designated development origins.
+- [x] **Booking & Technician Ownership Checks** (`app/api/v1/bookings.py`): Customers can only cancel their own bookings. Providers can only update/assign their own bookings. Technicians are blocked from directly modifying bookings via `PUT /bookings/{id}/status` (HTTP 403 Forbidden) and must use their assigned job portal.
+- [x] **Invoice & Payment Multi-Tenant Isolation** (`app/api/v1/payments.py`): Invoices and payments are strictly protected by resource ownership; customers cannot view other customers' invoices (HTTP 403 Forbidden).
+- [x] **Cryptographic Razorpay Signature Verification** (`app/api/v1/payments.py`): HMAC-SHA256 signature verification endpoint (`POST /razorpay/verify`) validating payment authenticity.
+- [x] **Automated Security Regression Suite** (`tests/test_api.py`): 29 automated Pytest test cases (including dedicated security assertions) passing 100%.

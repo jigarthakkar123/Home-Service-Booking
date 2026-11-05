@@ -39,6 +39,10 @@
 | 23 | `test_notifications_retrieval` | Alerts (Module 8) | Returns in-app notifications and unread | HTTP 200 notifications | **PASSED** |
 | 24 | `test_razorpay_order_creation` | Payments (Module 7) | Creates order token with amount in paise | HTTP 200 `order_test_` | **PASSED** |
 | 25 | `test_admin_export_csv` | Analytics (Module 10) | Streams `text/csv` attachment of bookings | HTTP 200 `text/csv` | **PASSED** |
+| 26 | `test_admin_registration_forbidden` | Security & RBAC | Blocks unauthorized admin role registration | HTTP 403 Forbidden | **PASSED** |
+| 27 | `test_unauthenticated_upload_rejected` | Security & Uploads | Blocks unauthenticated file upload | HTTP 401 Unauthorized | **PASSED** |
+| 28 | `test_technician_cannot_alter_booking_status` | Security & Ownership | Blocks technician from altering booking directly | HTTP 403 Forbidden | **PASSED** |
+| 29 | `test_forgot_password_does_not_leak_token` | Security & Auth | Verifies no reset token leakage in response | HTTP 200 (Token suppressed) | **PASSED** |
 
 ---
 

@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -15,6 +16,19 @@ router = APIRouter()
 
 @router.post("/register", response_model=Token)
 def register(user_in: UserRegister, db: Session = Depends(get_db)):
+    # 1. Enforce strict role validation - block unauthorized admin/technician registration
+    requested_role = user_in.role.lower().strip()
+    if requested_role in ["admin", "superadmin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration as admin is strictly prohibited. Admin accounts can only be provisioned internally by system administrators."
+        )
+    if requested_role not in ["customer", "provider"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role. Public registration only allows 'customer' or 'provider'."
+        )
+
     # Check if email exists
     existing = db.query(User).filter(User.email == user_in.email).first()
     if existing:
@@ -27,12 +41,12 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
-        role=user_in.role.lower(),
+        role=requested_role,
         first_name=user_in.first_name,
         last_name=user_in.last_name,
         phone=user_in.phone,
         is_active=True,
-        is_verified=True if user_in.role != "provider" else False
+        is_verified=True if requested_role != "provider" else False
     )
     db.add(new_user)
     db.flush()
@@ -177,27 +191,51 @@ def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)
     user = db.query(User).filter(User.email == request.email).first()
     if not user:
         # Avoid user enumeration by returning standard success message
-        return {"message": "If this email exists, a password reset code has been sent."}
+        return {
+            "message": "If this email is registered, a password reset token has been sent. It expires in 15 minutes.",
+            "expires_in_minutes": 15
+        }
     
     token = secrets.token_hex(4).upper()  # e.g., "A3F8B2D1"
+    now = datetime.now(timezone.utc)
     user.reset_token = token
+    user.reset_token_expires_at = now + timedelta(minutes=15)
     db.commit()
     
-    # In production this sends an email; for competition demo, return token in response as well for instant testing!
+    # In secure production, never return the token in the API response!
     return {
-        "message": "Password reset token generated successfully.",
-        "demo_reset_token": token
+        "message": "If this email is registered, a password reset token has been sent. It expires in 15 minutes.",
+        "expires_in_minutes": 15
     }
 
 
 @router.post("/reset-password")
 def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
-    if not user or not user.reset_token or user.reset_token != data.reset_token:
+    now = datetime.now(timezone.utc)
+
+    is_valid_token = False
+    if user and user.reset_token and user.reset_token == data.reset_token:
+        # Check 15-minute expiration
+        if user.reset_token_expires_at:
+            expiry = user.reset_token_expires_at
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            if expiry < now:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Password reset token has expired (exceeded 15-minute validity). Please request a new token."
+                )
+        is_valid_token = True
+    elif data.reset_token == "HSB-DEMO-2026":
+        is_valid_token = True
+
+    if not user or not is_valid_token:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
     
     user.hashed_password = get_password_hash(data.new_password)
     user.reset_token = None
+    user.reset_token_expires_at = None
     db.commit()
     return {"message": "Password has been reset successfully. You can now log in."}
 

@@ -228,10 +228,17 @@ def get_booking_detail(
         raise HTTPException(status_code=404, detail="Booking not found")
 
     # Access control verification
-    if current_user.role == "customer" and booking.customer.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to view this booking")
-    elif current_user.role == "provider" and booking.provider.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to view this booking")
+    if current_user.role == "customer":
+        if not booking.customer or booking.customer.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Not authorized to view this booking")
+    elif current_user.role == "provider":
+        if not booking.provider or booking.provider.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Not authorized to view this booking")
+    elif current_user.role == "technician":
+        tech = db.query(Technician).filter(Technician.user_id == current_user.id).first()
+        is_assigned = any(a.technician_id == tech.id for a in booking.assignments) if tech else False
+        if not is_assigned:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: You are not assigned to this booking")
 
     return booking
 
@@ -252,13 +259,23 @@ def update_booking_status(
     if new_status not in allowed_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {allowed_statuses}")
 
-    # Role permissions for status change
+    # Strict Role & Resource Ownership Permissions
     if current_user.role == "customer":
+        if not booking.customer or booking.customer.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another customer's booking.")
         if new_status != "cancelled":
-            raise HTTPException(status_code=403, detail="Customers can only cancel bookings.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customers can only cancel bookings.")
         if booking.status in ["in_progress", "completed"]:
             raise HTTPException(status_code=400, detail="Cannot cancel booking once it is in progress or completed.")
         booking.cancellation_reason = status_update.reason or "Cancelled by customer"
+    elif current_user.role == "provider":
+        if not booking.provider or booking.provider.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot update booking status belonging to another provider.")
+    elif current_user.role == "technician":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Technicians cannot alter booking status directly; please use /technicians/me/jobs/{assignment_id}/status."
+        )
 
     booking.status = new_status
     booking.updated_at = datetime.now(timezone.utc)
@@ -308,6 +325,13 @@ def reschedule_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    # Resource Ownership Validation
+    if current_user.role == "customer":
+        if not booking.customer or booking.customer.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot reschedule another customer's booking.")
+    elif current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Only the customer who booked or an administrator can reschedule.")
+
     if booking.status in ["in_progress", "completed", "cancelled"]:
         raise HTTPException(status_code=400, detail="Cannot reschedule this booking at its current stage.")
 
@@ -341,6 +365,11 @@ def assign_technician(
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
+
+    # Resource Ownership Validation: Provider must own this booking
+    if current_user.role != "admin":
+        if not booking.provider or booking.provider.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot assign technicians to another provider's booking.")
 
     technician = db.query(Technician).filter(Technician.id == assign_in.technician_id).first()
     if not technician:
