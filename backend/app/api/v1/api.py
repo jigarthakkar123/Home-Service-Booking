@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth, users, categories, services, providers,
     technicians, bookings, payments, reviews, complaints,
-    coupons, notifications, analytics, uploads
+    coupons, notifications, analytics, uploads, rag
 )
 
 api_router = APIRouter()
@@ -21,3 +21,4 @@ api_router.include_router(coupons.router, prefix="/coupons", tags=["Coupons & Di
 api_router.include_router(notifications.router, prefix="/notifications", tags=["In-App Notifications"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reports"])
 api_router.include_router(uploads.router, prefix="/uploads", tags=["File Uploads"])
+api_router.include_router(rag.router, prefix="/rag", tags=["AI Knowledge Base & RAG Assistant"])
