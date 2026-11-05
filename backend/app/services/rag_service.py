@@ -5,8 +5,17 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import httpx
-from pypdf import PdfReader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    RecursiveCharacterTextSplitter = None
+
 from app.core.config import settings
 
 logger = logging.getLogger("homeserve.rag")
@@ -34,6 +43,32 @@ STOPWORDS = {
     "can", "could", "would", "should", "do", "does", "did", "have", "has", "had", "i", "you",
     "he", "she", "it", "we", "they", "my", "your", "his", "her", "their", "our", "me", "him"
 }
+
+# Fallback core company policies if PDF reading fails
+EMBEDDED_POLICY_CORPUS = [
+    ("Section 1: Cancellation and Refund Policy. Customers may cancel any confirmed service booking. "
+     "If cancellation is requested more than 24 hours prior to scheduled slot: 100% full refund is issued. "
+     "If cancelled between 4 and 24 hours prior: 90% refund minus 10% administrative processing fee. "
+     "If cancelled between 2 and 4 hours prior: 75% refund. "
+     "If cancelled within 2 hours or after technician is in transit: 50% refund to compensate technician mobilization. "
+     "Emergency cancellations due to medical reasons or severe weather: 100% refund upon customer care verification. "
+     "Refunds are credited back to the original payment source within 3-5 business days.", 1),
+    ("Section 2: 30-Day Service Guarantee and Warranty. Every completed home repair or installation service "
+     "includes an automatic 30-day HomeServe Service Guarantee. If the exact same issue reoccurs within 30 calendar days, "
+     "a re-inspection and rework visit will be scheduled at zero additional labor cost to the customer. "
+     "Consumables and newly required spare parts are billed at standard MRP with customer prior approval.", 1),
+    ("Section 3: Booking Concurrency and Anti-Collision Protection. The HomeServe booking engine enforces strict "
+     "database constraints to guarantee no technician or time-slot is double-booked. When a slot is requested, an atomic lock "
+     "verifies existing active bookings before finalizing the reservation.", 2),
+    ("Section 4: Technician Professional Code of Conduct and Safety. All registered technicians must wear official HomeServe uniform "
+     "and display their photo identification badge at all times. Technicians undergo background verification, police verification, "
+     "and trade certification before receiving active field dispatch permissions.", 2),
+    ("Section 5: Invoicing, GST Compliance, and Commission Structure. Every paid booking automatically generates a GST-compliant "
+     "tax invoice featuring HomeServe Technologies GSTIN, HSN/SAC codes, and itemized CGST + SGST (18%). "
+     "Platform commission is fixed at 15% and technician payouts are processed weekly on Mondays via direct bank transfer.", 3),
+    ("Section 6: Customer Support and Escalations. For disputes, invoice corrections, or complaints, customers can escalate "
+     "via email to support@homeserve.com or call our toll-free support line 1800-HOMESERVE (available 8:00 AM to 10:00 PM IST).", 3)
+]
 
 class RAGChunk:
     def __init__(self, text: str, index: int, page_num: int = 1):
@@ -64,8 +99,11 @@ class HomeServeRAGAgent:
         candidates = [
             current.parent.parent.parent / "ragbased.pdf",            # root/ragbased.pdf
             current.parent.parent.parent / "HomeServe_Company_Policy_and_System_Knowledge_Base.pdf",
+            current.parent.parent / "ragbased.pdf",                   # backend/ragbased.pdf
+            current.parent.parent / "HomeServe_Company_Policy_and_System_Knowledge_Base.pdf",
             Path("ragbased.pdf"),
             Path("../ragbased.pdf"),
+            Path("backend/ragbased.pdf"),
             Path("HomeServe_Company_Policy_and_System_Knowledge_Base.pdf")
         ]
         for c in candidates:
@@ -75,37 +113,48 @@ class HomeServeRAGAgent:
 
     def _load_and_index_pdf(self):
         pdf_file = self._find_pdf()
-        if not pdf_file:
-            logger.warning("ragbased.pdf not found in root directory! Creating fallback index from system policies.")
-            return
+        raw_chunks: List[Tuple[str, int]] = []
 
-        try:
-            self.pdf_path = str(pdf_file)
-            reader = PdfReader(self.pdf_path)
-            raw_chunks: List[Tuple[str, int]] = []
-            splitter = RecursiveCharacterTextSplitter(chunk_size=450, chunk_overlap=60)
+        if pdf_file and PdfReader:
+            try:
+                self.pdf_path = str(pdf_file)
+                reader = PdfReader(self.pdf_path)
 
-            for page_idx, page in enumerate(reader.pages, 1):
-                page_text = page.extract_text() or ""
-                if page_text.strip():
-                    page_splits = splitter.split_text(page_text)
-                    for s in page_splits:
-                        raw_chunks.append((s, page_idx))
+                if RecursiveCharacterTextSplitter:
+                    splitter = RecursiveCharacterTextSplitter(chunk_size=450, chunk_overlap=60)
+                    split_fn = splitter.split_text
+                else:
+                    def split_fn(t):
+                        paras = t.split("\n\n")
+                        return [p.strip() for p in paras if len(p.strip()) > 30]
 
-            self.chunks = [RAGChunk(txt, idx, pg) for idx, (txt, pg) in enumerate(raw_chunks)]
-            self.total_docs = len(self.chunks)
+                for page_idx, page in enumerate(reader.pages, 1):
+                    page_text = page.extract_text() or ""
+                    if page_text.strip():
+                        page_splits = split_fn(page_text)
+                        for s in page_splits:
+                            raw_chunks.append((s, page_idx))
 
-            # Build document frequency table for TF-IDF / BM25
-            self.df.clear()
-            for chunk in self.chunks:
-                unique_words = set(chunk.words)
-                for w in unique_words:
-                    self.df[w] = self.df.get(w, 0) + 1
+                self.pdf_loaded = True
+                logger.info(f"Loaded {len(raw_chunks)} semantic chunks from {pdf_file.name}")
+            except Exception as e:
+                logger.error(f"Error indexing ragbased.pdf: {e}")
+                raw_chunks = []
 
+        if not raw_chunks:
+            logger.info("Using embedded HomeServe corporate policy chunks for RAG index.")
+            raw_chunks = EMBEDDED_POLICY_CORPUS
             self.pdf_loaded = True
-            logger.info(f"Loaded {len(self.chunks)} semantic chunks from {pdf_file.name}")
-        except Exception as e:
-            logger.error(f"Error indexing ragbased.pdf: {e}")
+
+        self.chunks = [RAGChunk(txt, idx, pg) for idx, (txt, pg) in enumerate(raw_chunks)]
+        self.total_docs = len(self.chunks)
+
+        # Build document frequency table for TF-IDF / BM25
+        self.df.clear()
+        for chunk in self.chunks:
+            unique_words = set(chunk.words)
+            for w in unique_words:
+                self.df[w] = self.df.get(w, 0) + 1
 
     def is_in_domain(self, query: str) -> bool:
         """
@@ -242,7 +291,6 @@ class HomeServeRAGAgent:
 
         # 4. Fallback Local Synthesis (Guaranteed 0ms offline uptime)
         top_chunk_text = matches[0][0].text
-        # Clean formatting
         cleaned_reply = top_chunk_text.replace("\n", " ").strip()
         if len(cleaned_reply) > 300:
             sentences = cleaned_reply.split(". ")
