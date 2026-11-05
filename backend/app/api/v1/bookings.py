@@ -48,7 +48,12 @@ def create_booking(
     if not provider:
         raise HTTPException(status_code=404, detail="Selected service provider is not verified or available")
 
-    # 3. Double Booking Prevention Logic
+    # 3. Double Booking Prevention Logic with Pessimistic Concurrency Lock
+    try:
+        db.query(ServiceProvider).filter(ServiceProvider.id == provider.id).with_for_update().first()
+    except Exception:
+        pass  # SQLite uses transactional write locks
+
     # Count active bookings for this provider, date, and slot
     active_slot_bookings = db.query(Booking).filter(
         Booking.provider_id == provider.id,

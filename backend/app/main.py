@@ -7,6 +7,7 @@ from app.core.database import engine, Base
 from app.api.v1.api import api_router
 from app.models import models  # Ensures all models are registered
 from app.initial_data import init_db
+from app.core.rate_limiter import RateLimiterMiddleware
 
 # Create database tables automatically & seed
 Base.metadata.create_all(bind=engine)
@@ -20,6 +21,9 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs",
     redoc_url=f"{settings.API_V1_STR}/redoc"
 )
+
+# Rate Limiting Middleware (OWASP Top 10 Brute Force Protection)
+app.add_middleware(RateLimiterMiddleware)
 
 # CORS Middleware setup - Strict Origin Validation
 app.add_middleware(
