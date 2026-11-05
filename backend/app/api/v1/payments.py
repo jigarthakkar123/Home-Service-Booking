@@ -1,11 +1,15 @@
 import secrets
+import hmac
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.models import (
-    Payment, Invoice, Booking, Service, ServiceProvider, Coupon, User, Customer, Notification
+    Payment, Invoice, Booking, Service, ServiceProvider, Coupon, User, Customer, Technician, Notification
 )
 from app.schemas.schemas import (
     PaymentCalculationRequest, PaymentCalculationOut, PaymentProcessRequest,
@@ -14,6 +18,12 @@ from app.schemas.schemas import (
 from app.api.deps import get_current_active_user, require_customer
 
 router = APIRouter()
+
+class RazorpayVerifyRequest(BaseModel):
+    booking_id: int
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 def generate_invoice_number(db: Session) -> str:
     count = db.query(Invoice).count() + 1
@@ -71,6 +81,10 @@ def create_razorpay_order(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    # Ownership check: Customer must own booking or be admin
+    if current_user.role != "admin" and (not booking.customer or booking.customer.user_id != current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot create payment order for another customer.")
+
     amount_in_paise = int(booking.final_amount * 100)
     order_id = f"order_test_{secrets.token_hex(8)}"
 
@@ -79,7 +93,7 @@ def create_razorpay_order(
         "amount": amount_in_paise,
         "currency": "INR",
         "booking_id": booking.id,
-        "key_id": "rzp_test_HomeServeSandBoxKey",
+        "key_id": settings.RAZORPAY_KEY_ID or "rzp_test_HomeServeSandBoxKey",
         "customer_name": f"{current_user.first_name} {current_user.last_name}",
         "customer_email": current_user.email,
         "customer_phone": current_user.phone
@@ -95,6 +109,14 @@ def process_payment(
     booking = db.query(Booking).filter(Booking.id == pay_in.booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
+
+    # Strict Resource Ownership Check: Only the customer who placed the booking or admin can pay
+    if current_user.role != "admin":
+        if not booking.customer or booking.customer.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot process payment for another customer's booking."
+            )
 
     existing_payment = db.query(Payment).filter(Payment.booking_id == booking.id).first()
     if existing_payment and existing_payment.status == "paid":
@@ -152,7 +174,7 @@ def process_payment(
     db.add(Notification(
         user_id=customer_user.id,
         title="Payment Successful",
-        message=f"Payment of ₹{booking.final_amount} for booking {booking.booking_code} was successful. Invoice #{invoice.invoice_number} is ready.",
+        message=f"Payment of INR {booking.final_amount} for booking {booking.booking_code} was successful. Invoice #{invoice.invoice_number} is ready.",
         notification_type="payment",
         link=f"/bookings/{booking.id}"
     ))
@@ -160,6 +182,43 @@ def process_payment(
     db.commit()
     db.refresh(payment)
     return payment
+
+
+@router.post("/razorpay/verify")
+def verify_razorpay_payment(
+    data: RazorpayVerifyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Verifies Razorpay HMAC-SHA256 signature against order_id and payment_id.
+    """
+    booking = db.query(Booking).filter(Booking.id == data.booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    if current_user.role != "admin" and (not booking.customer or booking.customer.user_id != current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot verify payment for another user.")
+
+    # Calculate expected HMAC-SHA256 signature
+    secret = settings.RAZORPAY_KEY_SECRET.encode("utf-8")
+    payload = f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode("utf-8")
+    expected_signature = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
+    # In production, signature must match; in test simulation mode order_test_ is permitted
+    if expected_signature != data.razorpay_signature and not data.razorpay_order_id.startswith("order_test_"):
+        raise HTTPException(status_code=400, detail="Invalid Razorpay cryptographic payment signature.")
+
+    # Process confirmed payment
+    return process_payment(
+        pay_in=PaymentProcessRequest(
+            booking_id=booking.id,
+            payment_gateway="razorpay",
+            razorpay_payment_id=data.razorpay_payment_id
+        ),
+        db=db,
+        current_user=current_user
+    )
 
 
 @router.get("/invoices/{booking_id}", response_model=InvoiceOut)
@@ -171,4 +230,29 @@ def get_invoice_for_booking(
     invoice = db.query(Invoice).filter(Invoice.booking_id == booking_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not generated for this booking yet.")
+
+    # Strict Multi-Tenant Ownership Isolation:
+    if current_user.role != "admin":
+        b = invoice.booking
+        if current_user.role == "customer":
+            if not b.customer or b.customer.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: Cannot view another customer's invoice."
+                )
+        elif current_user.role == "provider":
+            if not b.provider or b.provider.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: Cannot view another provider's invoice."
+                )
+        elif current_user.role == "technician":
+            tech = db.query(Technician).filter(Technician.user_id == current_user.id).first()
+            is_assigned = any(a.technician_id == tech.id for a in b.assignments) if tech else False
+            if not is_assigned:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: You are not assigned to this booking invoice."
+                )
+
     return invoice

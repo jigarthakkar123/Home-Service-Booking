@@ -96,12 +96,10 @@ export default function ForgotPassword() {
             </form>
           ) : (
             <form onSubmit={handleReset} className="space-y-4">
-              {resetToken && (
-                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
-                  <span className="font-bold block">Demo Reset Code Ready:</span>
-                  <span className="font-mono font-black text-sm text-blue-700">{resetToken}</span>
-                </div>
-              )}
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
+                <span className="font-bold block">Reset Code Sent (15m validity):</span>
+                <span className="text-[11px] text-blue-700">Check your inbox or enter testing code: <code className="font-mono font-bold bg-white px-1 py-0.5 rounded">HSB-DEMO-2026</code></span>
+              </div>
 
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Reset Token</label>

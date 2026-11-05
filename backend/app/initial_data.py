@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
 from app.core.security import get_password_hash
@@ -15,6 +16,15 @@ from app.models.models import (
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    # Safe migration: ensure reset_token_expires_at exists in users table
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expires_at DATETIME"))
+            conn.commit()
+    except Exception:
+        pass # Column already exists
+
     db: Session = SessionLocal()
 
     try:
