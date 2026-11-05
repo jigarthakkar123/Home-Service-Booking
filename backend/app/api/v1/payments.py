@@ -192,6 +192,7 @@ def verify_razorpay_payment(
 ):
     """
     Verifies Razorpay HMAC-SHA256 signature against order_id and payment_id.
+    Strict cryptographic verification: ZERO bypass permitted.
     """
     booking = db.query(Booking).filter(Booking.id == data.booking_id).first()
     if not booking:
@@ -205,8 +206,8 @@ def verify_razorpay_payment(
     payload = f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode("utf-8")
     expected_signature = hmac.new(secret, payload, hashlib.sha256).hexdigest()
 
-    # In production, signature must match; in test simulation mode order_test_ is permitted
-    if expected_signature != data.razorpay_signature and not data.razorpay_order_id.startswith("order_test_"):
+    # Strict HMAC cryptographic verification (ZERO BYPASS)
+    if not hmac.compare_digest(expected_signature, data.razorpay_signature):
         raise HTTPException(status_code=400, detail="Invalid Razorpay cryptographic payment signature.")
 
     # Process confirmed payment

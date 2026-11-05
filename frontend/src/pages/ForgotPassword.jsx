@@ -20,9 +20,6 @@ export default function ForgotPassword() {
     try {
       const res = await api.forgotPassword(email);
       setMessage(res.message);
-      if (res.demo_reset_token) {
-        setResetToken(res.demo_reset_token);
-      }
       setStep(2);
     } catch (err) {
       setErrorMsg(err.message || 'Request failed');
@@ -44,7 +41,7 @@ export default function ForgotPassword() {
       alert('Password reset successfully. Please log in.');
       navigate('/login');
     } catch (err) {
-      setErrorMsg(err.message || 'Reset failed');
+      setErrorMsg(err.message || 'Reset failed. Please verify your token and 15-minute expiration.');
     } finally {
       setSubmitting(false);
     }
@@ -98,7 +95,7 @@ export default function ForgotPassword() {
             <form onSubmit={handleReset} className="space-y-4">
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
                 <span className="font-bold block">Reset Code Sent (15m validity):</span>
-                <span className="text-[11px] text-blue-700">Check your inbox or enter testing code: <code className="font-mono font-bold bg-white px-1 py-0.5 rounded">HSB-DEMO-2026</code></span>
+                <span className="text-[11px] text-blue-700">Please check your registered email inbox for the 8-character verification token.</span>
               </div>
 
               <div>
@@ -108,7 +105,7 @@ export default function ForgotPassword() {
                   required
                   value={resetToken}
                   onChange={(e) => setResetToken(e.target.value)}
-                  placeholder="Enter token"
+                  placeholder="e.g. A3F8B2D1"
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 uppercase font-mono"
                 />
               </div>

@@ -1,4 +1,5 @@
 import os
+import secrets
 from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings
@@ -7,10 +8,15 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DB_FILE = BACKEND_DIR / "homeserve.db"
 DEFAULT_DB_URL = f"sqlite:///{DEFAULT_DB_FILE.as_posix()}"
 
+# Read strictly from environment variable. If not set, generate a cryptographically strong
+# ephemeral 256-bit random key at runtime to eliminate hardcoded secrets in the codebase.
+_env_secret = os.getenv("SECRET_KEY") or os.getenv("JWT_SECRET_KEY")
+ACTIVE_SECRET_KEY = _env_secret if _env_secret else secrets.token_hex(32)
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "HomeServe Technologies SaaS Platform"
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "hs-sec-2026-9f8a3c2e1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0")
+    SECRET_KEY: str = ACTIVE_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours (Strict OWASP standard)
 
@@ -21,6 +27,14 @@ class Settings(BaseSettings):
     # Payment Integration (Razorpay Test Mode or simulated fallback)
     RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder_key")
     RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET", "rzp_test_placeholder_secret")
+
+    # SMTP Email Configuration for Password Reset & Transactional Notifications
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    EMAILS_FROM_EMAIL: str = os.getenv("EMAILS_FROM_EMAIL", "noreply@homeserve.com")
+    EMAILS_FROM_NAME: str = os.getenv("EMAILS_FROM_NAME", "HomeServe Platform")
 
     # Platform default commission percentage
     DEFAULT_COMMISSION_PERCENTAGE: float = 15.0

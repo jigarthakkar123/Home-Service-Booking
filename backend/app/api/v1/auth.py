@@ -10,6 +10,7 @@ from app.schemas.schemas import (
     Token, UserRegister, UserLogin, UserOut,
     PasswordResetRequest, PasswordResetConfirm, PasswordChange
 )
+from app.core.email import send_password_reset_email
 from app.api.deps import get_current_active_user
 
 router = APIRouter()
@@ -202,6 +203,9 @@ def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)
     user.reset_token_expires_at = now + timedelta(minutes=15)
     db.commit()
     
+    # Securely dispatch token via SMTP email (or application audit log in dev/test)
+    send_password_reset_email(user.email, token)
+
     # In secure production, never return the token in the API response!
     return {
         "message": "If this email is registered, a password reset token has been sent. It expires in 15 minutes.",
@@ -214,25 +218,21 @@ def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     now = datetime.now(timezone.utc)
 
-    is_valid_token = False
-    if user and user.reset_token and user.reset_token == data.reset_token:
-        # Check 15-minute expiration
-        if user.reset_token_expires_at:
-            expiry = user.reset_token_expires_at
-            if expiry.tzinfo is None:
-                expiry = expiry.replace(tzinfo=timezone.utc)
-            if expiry < now:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Password reset token has expired (exceeded 15-minute validity). Please request a new token."
-                )
-        is_valid_token = True
-    elif data.reset_token == "HSB-DEMO-2026":
-        is_valid_token = True
-
-    if not user or not is_valid_token:
+    # Strict token validation - NO DEMO BACKDOOR ALLOWED
+    if not (user and user.reset_token and user.reset_token == data.reset_token):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
-    
+
+    # Check 15-minute expiration
+    if user.reset_token_expires_at:
+        expiry = user.reset_token_expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry < now:
+            raise HTTPException(
+                status_code=400,
+                detail="Password reset token has expired (exceeded 15-minute validity). Please request a new token."
+            )
+
     user.hashed_password = get_password_hash(data.new_password)
     user.reset_token = None
     user.reset_token_expires_at = None

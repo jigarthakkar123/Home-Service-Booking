@@ -5,8 +5,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.rate_limiter import rate_limiter
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def reset_limiter_each_test():
+    rate_limiter.reset()
+    yield
+    rate_limiter.reset()
 
 def test_health_check():
     response = client.get("/health")
@@ -347,3 +354,61 @@ def test_forgot_password_does_not_leak_token():
 
 
 
+
+import uuid
+import hmac
+import hashlib
+from app.core.config import settings
+
+def test_universal_demo_token_backdoor_rejected():
+    # Attempting to use backdoor token "HSB-DEMO-2026" without a genuine reset request must be blocked with HTTP 400
+    resp = client.post("/api/v1/auth/reset-password", json={
+        "email": "admin@homeserve.com",
+        "reset_token": "HSB-DEMO-2026",
+        "new_password": "HackedPassword123!"
+    })
+    assert resp.status_code == 400
+    assert "invalid or expired reset token" in resp.json()["detail"].lower()
+
+def test_razorpay_signature_bypass_rejected():
+    # Login as customer
+    cust_login = client.post("/api/v1/auth/login", json={
+        "email": "customer@homeserve.com",
+        "password": "Customer@123"
+    })
+    token = cust_login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Attempt verify with order_test_ and bogus signature -> must be strictly rejected with HTTP 400
+    resp = client.post("/api/v1/payments/razorpay/verify", json={
+        "booking_id": 1,
+        "razorpay_order_id": "order_test_fake999",
+        "razorpay_payment_id": "pay_fake123",
+        "razorpay_signature": "invalid_garbage_signature"
+    }, headers=headers)
+    assert resp.status_code == 400
+    assert "invalid razorpay cryptographic payment signature" in resp.json()["detail"].lower()
+
+def test_cross_customer_invoice_access_forbidden():
+    # Register an independent customer
+    test_email = f"alice_{uuid.uuid4().hex[:6]}@example.com"
+    reg_resp = client.post("/api/v1/auth/register", json={
+        "first_name": "Alice",
+        "last_name": "Tenant",
+        "email": test_email,
+        "password": "Password123!",
+        "role": "customer"
+    })
+    assert reg_resp.status_code == 200
+    alice_token = reg_resp.json()["access_token"]
+    alice_headers = {"Authorization": f"Bearer {alice_token}"}
+
+    # Attempt to fetch Booking 1 invoice (which belongs to customer@homeserve.com)
+    inv_resp = client.get("/api/v1/payments/invoices/1", headers=alice_headers)
+    assert inv_resp.status_code in [403, 404]
+
+def test_rate_limiter_active_on_responses():
+    # Verify rate limiter injects standard tracking headers
+    resp = client.get("/api/v1/categories")
+    assert resp.status_code == 200
+    assert "X-RateLimit-Remaining" in resp.headers
