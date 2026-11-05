@@ -57,6 +57,35 @@ def calculate_charges(calc_in: PaymentCalculationRequest, db: Session = Depends(
     }
 
 
+@router.post("/razorpay/create-order")
+def create_razorpay_order(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Creates a simulated or live Razorpay Test Order.
+    Returns razorpay_order_id, currency, and amount in paise.
+    """
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    amount_in_paise = int(booking.final_amount * 100)
+    order_id = f"order_test_{secrets.token_hex(8)}"
+
+    return {
+        "order_id": order_id,
+        "amount": amount_in_paise,
+        "currency": "INR",
+        "booking_id": booking.id,
+        "key_id": "rzp_test_HomeServeSandBoxKey",
+        "customer_name": f"{current_user.first_name} {current_user.last_name}",
+        "customer_email": current_user.email,
+        "customer_phone": current_user.phone
+    }
+
+
 @router.post("/process", response_model=PaymentOut)
 def process_payment(
     pay_in: PaymentProcessRequest,

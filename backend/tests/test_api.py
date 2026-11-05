@@ -196,3 +196,114 @@ def test_payment_and_invoice_generation():
     assert "INV-2026-" in inv["invoice_number"]
     assert inv["total_amount"] > 0
 
+def test_technician_assigned_jobs_query():
+    tech_login = client.post("/api/v1/auth/login", json={
+        "email": "technician@homeserve.com",
+        "password": "Technician@123"
+    })
+    token = tech_login.json()["access_token"]
+    resp = client.get("/api/v1/technicians/me/jobs", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    jobs = resp.json()
+    assert isinstance(jobs, list)
+
+def test_provider_analytics_access():
+    prov_login = client.post("/api/v1/auth/login", json={
+        "email": "provider@homeserve.com",
+        "password": "Provider@123"
+    })
+    token = prov_login.json()["access_token"]
+    resp = client.get("/api/v1/analytics/provider", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_bookings" in data
+
+def test_user_profile_me():
+    login_resp = client.post("/api/v1/auth/login", json={
+        "email": "customer@homeserve.com",
+        "password": "Customer@123"
+    })
+    token = login_resp.json()["access_token"]
+    resp = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    profile = resp.json()
+    assert profile["email"] == "customer@homeserve.com"
+    assert profile["role"] == "customer"
+    assert profile["is_active"] is True
+
+def test_unauthenticated_request_rejected():
+    resp = client.get("/api/v1/bookings")
+    assert resp.status_code in [401, 403]
+
+def test_service_detail_by_slug():
+    resp = client.get("/api/v1/services/ac-deep-jet-servicing")
+    assert resp.status_code == 200
+    svc = resp.json()
+    assert svc["slug"] == "ac-deep-jet-servicing"
+    assert svc["base_price"] > 0
+
+def test_customer_address_management():
+    login_resp = client.post("/api/v1/auth/login", json={
+        "email": "customer@homeserve.com",
+        "password": "Customer@123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Retrieve addresses
+    resp = client.get("/api/v1/users/addresses", headers=headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+def test_review_retrieval():
+    resp = client.get("/api/v1/reviews/provider/1")
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+def test_complaints_retrieval():
+    login_resp = client.post("/api/v1/auth/login", json={
+        "email": "customer@homeserve.com",
+        "password": "Customer@123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = client.get("/api/v1/complaints", headers=headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+def test_notifications_retrieval():
+    login_resp = client.post("/api/v1/auth/login", json={
+        "email": "customer@homeserve.com",
+        "password": "Customer@123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = client.get("/api/v1/notifications", headers=headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+def test_razorpay_order_creation():
+    login_resp = client.post("/api/v1/auth/login", json={
+        "email": "customer@homeserve.com",
+        "password": "Customer@123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = client.post("/api/v1/payments/razorpay/create-order?booking_id=1", headers=headers)
+    assert resp.status_code == 200
+    order = resp.json()
+    assert "order_id" in order
+    assert order["currency"] == "INR"
+
+def test_admin_export_csv():
+    login_resp = client.post("/api/v1/auth/login", json={
+        "email": "admin@homeserve.com",
+        "password": "Admin@123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = client.get("/api/v1/analytics/export/bookings/csv", headers=headers)
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+
+
