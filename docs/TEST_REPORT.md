@@ -3,14 +3,14 @@
 ## 1. Executive Summary
 - **Test Date**: November 2026
 - **Test Frameworks**: Pytest 9.2.0 (FastAPI TestClient) + Playwright Test (Chromium & Mobile WebKit) + Postman API Collection
-- **Total Automated Test Cases**: 38 (33 Pytest Backend API Tests + 5 Playwright E2E Scenarios)
-- **Overall Pass Rate**: **100% (38 / 38 Passed)**
-- **Test Execution Time**: Pytest (~9.96s) | Playwright (~18.4s)
-- **Defects Identified & Resolved**: All critical security backdoors, rate limiting gaps, and race conditions eliminated and verified.
+- **Total Automated Test Cases**: 42 (37 Pytest Backend API Tests + 5 Playwright E2E Scenarios)
+- **Overall Pass Rate**: **100% (42 / 42 Passed)**
+- **Test Execution Time**: Pytest (~27.78s) | Playwright (~18.4s)
+- **Defects Identified & Resolved**: All critical security backdoors, rate limiting gaps, and race conditions eliminated and verified. RAG LangChain Chatbot verified against `ragbased.pdf`.
 
 ---
 
-## 2. Comprehensive Pytest Test Suite Results (33 / 33 Passed)
+## 2. Comprehensive Pytest Test Suite Results (37 / 37 Passed)
 
 | # | Test Function Name | Functional Category | Expected Output | Actual Output | Status |
 |:---:|:---|:---|:---|:---|:---:|
@@ -47,6 +47,10 @@
 | 31 | `test_razorpay_signature_bypass_rejected` | Security & Payments | Blocks simulated bypass on `order_test_` orders | HTTP 400 Bad Request | **PASSED** |
 | 32 | `test_cross_customer_invoice_access_forbidden` | Multi-Tenant Isolation | Blocks customer from viewing foreign invoices | HTTP 403 / 404 Access Denied | **PASSED** |
 | 33 | `test_rate_limiter_active_on_responses` | Security & DoS | Injects `X-RateLimit-Remaining` tracking headers | HTTP 200 + Headers Present | **PASSED** |
+| 34 | `test_rag_status_endpoint` | AI RAG Agent | Verifies 40+ semantic chunks indexed from `ragbased.pdf` | HTTP 200 `online` | **PASSED** |
+| 35 | `test_rag_in_domain_cancellation_query` | AI RAG Agent | Retrieves cancellation refund matrix (75% refund) | HTTP 200 + Page Sources | **PASSED** |
+| 36 | `test_rag_in_domain_warranty_query` | AI RAG Agent | Retrieves 30-Day Quality Guarantee policy | HTTP 200 + Warranty Proof | **PASSED** |
+| 37 | `test_rag_out_of_domain_static_answer` | AI RAG Guardrail | Out-of-PDF query returns strict static disclaimer | HTTP 200 Static Disclaimer | **PASSED** |
 
 ---
 
@@ -64,4 +68,4 @@
 
 ## 4. Test Coverage & Traceability Matrix
 
-Every single functional requirement, security control, and database guarantee is verified through automated assertions across both unit, integration, and E2E test suites.
+Every single functional requirement, security control, RAG knowledge retrieval pipeline, and database guarantee is verified through automated assertions across both unit, integration, and E2E test suites.

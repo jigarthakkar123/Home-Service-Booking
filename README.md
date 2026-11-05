@@ -31,8 +31,8 @@
 | **2** | **UI/UX & Frontend** | **15 Marks** | React 19, Tailwind CSS, 4 Dashboards (Admin, Provider, Customer, Tech), 4-Step Wizard, Invoices. | ✅ Fully Met |
 | **3** | **Database Design** | **10 Marks** | [ER Diagram](docs/ERD.md), 20 Relational Entities, [DDL Script](database/schema.sql), [DML Seed Script](database/seed_data.sql). | ✅ Fully Met |
 | **4** | **Backend & REST APIs** | **15 Marks** | FastAPI endpoints for all 10 modules, atomic double-booking prevention, [Swagger Docs](https://homeserve-backend-vxjb.onrender.com/api/v1/docs). | ✅ Fully Met |
-| **5** | **Frontend-Backend Integration** | **10 Marks** | Dynamic API integration, JWT token in localStorage, Razorpay simulation, work photo uploads. | ✅ Fully Met |
-| **6** | **Testing & Quality Assurance** | **10 Marks** | [33 Pytest Tests (100% Pass)](docs/TEST_REPORT.md), [Playwright E2E Suite](frontend/tests/e2e.spec.js), [Postman Collection](HomeServe_API.postman_collection.json). | ✅ Fully Met |
+| **5** | **Frontend-Backend Integration** | **10 Marks** | Dynamic API integration, LangChain RAG Chatbot widget, JWT in localStorage, work photo uploads. | ✅ Fully Met |
+| **6** | **Testing & Quality Assurance** | **10 Marks** | [37 Pytest Tests (100% Pass)](docs/TEST_REPORT.md), [Playwright E2E Suite](frontend/tests/e2e.spec.js), [Postman Collection](HomeServe_API.postman_collection.json). | ✅ Fully Met |
 | **7** | **Security Implementation** | **10 Marks** | [Security Audit & OWASP Top 10 Report](docs/SECURITY_CHECKLIST.md), Zero Backdoors, Strict Razorpay HMAC, Rate Limiter Middleware & Concurrency Locks. | ✅ Fully Met |
 | **8** | **GitHub & Version Control** | **5 Marks** | `main` and `develop` branches, feature branch with Pull Request, `.gitignore`, `.env.example`, clean commit log. | ✅ Fully Met |
 | **9** | **Deployment & Production** | **10 Marks** | Live Netlify frontend, Live Render backend, [Deployment Architecture Guide](docs/DEPLOYMENT_GUIDE.md). | ✅ Fully Met |

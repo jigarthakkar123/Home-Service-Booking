@@ -412,3 +412,49 @@ def test_rate_limiter_active_on_responses():
     resp = client.get("/api/v1/categories")
     assert resp.status_code == 200
     assert "X-RateLimit-Remaining" in resp.headers
+
+def test_rag_status_endpoint():
+    resp = client.get("/api/v1/rag/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] in ["online", "indexing_fallback"]
+    assert data["total_semantic_chunks"] >= 30
+    assert "ragbased.pdf" in data["pdf_source"]
+
+def test_rag_in_domain_cancellation_query():
+    resp = client.post("/api/v1/rag/chat", json={
+        "message": "What is the cancellation refund policy 3 hours before booking?"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["in_domain"] is True
+    assert len(data["sources"]) > 0
+    # Must answer based on the PDF cancellation matrix (75% refund)
+    reply_lower = data["reply"].lower()
+    assert "75%" in reply_lower or "refund" in reply_lower or "cancellation" in reply_lower
+
+def test_rag_in_domain_warranty_query():
+    resp = client.post("/api/v1/rag/chat", json={
+        "message": "What is the warranty period for completed repairs?"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["in_domain"] is True
+    reply_lower = data["reply"].lower()
+    assert "30" in reply_lower or "warranty" in reply_lower or "guarantee" in reply_lower
+
+def test_rag_out_of_domain_static_answer():
+    # Out of PDF domain question -> Must strictly return the static answer
+    resp = client.post("/api/v1/rag/chat", json={
+        "message": "What is the capital of France and who won the football match?"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["in_domain"] is False
+    assert data["sources"] == []
+    expected_static = (
+        "I am HomeServe's AI Assistant trained exclusively on our company policies, booking rules, "
+        "service standards, and system documentation. I cannot answer queries outside the scope of "
+        "HomeServe Technologies. For general inquiries, please contact support@homeserve.com."
+    )
+    assert data["reply"] == expected_static

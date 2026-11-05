@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours (Strict OWASP standard)
 
     # Database: Supports Cloud MySQL (Aiven, TiDB, Render, Supabase, PlanetScale) or local SQLite fallback
-    # e.g., mysql+pymysql://user:pass@host:3306/dbname
     DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
+
+    # Gemini API Key for LangChain RAG Chatbot (Read strictly from env to comply with GitHub secret protection)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
     # Payment Integration (Razorpay Test Mode or simulated fallback)
     RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder_key")

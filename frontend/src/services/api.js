@@ -128,5 +128,9 @@ export const api = {
       throw new Error('Upload failed');
     }
     return response.json();
-  }
+  },
+
+  // RAG Chatbot
+  askRAG: (message, history = []) => request('/rag/chat', { method: 'POST', body: { message, history } }),
+  getRAGStatus: () => request('/rag/status')
 };
